@@ -1,0 +1,1491 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="semafloor-control-data.html">
+<link rel="import" href="semafloor-control-center-icons.html">
+<link rel="import" href="../jv-datepicker/datepicker-slide-from-bottom-animation.html">
+<link rel="import" href="../jv-datepicker/datepicker-slide-from-top-animation.html">
+
+<link rel="import" href="../app-layout/app-layout.html">
+
+<link rel="import" href="../iron-pages/iron-pages.html">
+<link rel="import" href="../iron-list/iron-list.html">
+<!-- <link rel="import" href="../iron-scroll-threshold/iron-scroll-threshold.html"> -->
+
+<link rel="import" href="../paper-button/paper-button.html">
+<link rel="import" href="../paper-dialog/paper-dialog.html">
+<link rel="import" href="../paper-dialog-scrollable/paper-dialog-scrollable.html">
+<link rel="import" href="../paper-icon-button/paper-icon-button.html">
+<link rel="import" href="../paper-menu-button/paper-menu-button.html">
+<link rel="import" href="../paper-radio-group/paper-radio-group.html">
+<link rel="import" href="../paper-radio-button/paper-radio-button.html">
+<link rel="import" href="../paper-spinner/paper-spinner-lite.html">
+<link rel="import" href="../paper-toast/paper-toast.html">
+
+<link rel="import" href="../firebase-element/firebase-collection.html">
+<!--
+An element providing a solution to no problem in particular.
+
+Example:
+
+    <semafloor-control-center></semafloor-control-center>
+
+Example:
+
+    <semafloor-control-center>
+      <h2>Hello semafloor-control-center</h2>
+    </semafloor-control-center>
+
+@demo demo/index.html
+@hero hero.svg
+-->
+
+<dom-module id="semafloor-control-center">
+  <template strip-whitespace>
+    <style>
+      :host {
+        display: block;
+        box-sizing: border-box;
+        -webkit-user-select: none;
+           -moz-user-select: none;
+            -ms-user-select: none;
+                user-select: none;
+        -webkit-tap-highlight-color: rgba(0,0,0,0);
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+
+      /* app shell related */
+      app-header {
+        background-color: #009688;
+        color: #fff;
+      }
+      app-toolbar > paper-icon-button[drawer-toggle] {
+        margin-right: 16px;
+      }
+      app-toolbar[bottom-item] paper-button {
+        color: #FFFF00;
+      }
+      app-toolbar[bottom-item] > div.selected-info {
+        font-size: 14px;
+        text-transform: uppercase;
+        @apply(--layout-vertical);
+        @apply(--layout-flex-auto);
+        @apply(--layout-center-center);
+      }
+
+      /* paper-dialog related */
+      /* Chromium bug */
+      /* https://github.com/PolymerElements/paper-dialog-scrollable/issues/32 */
+      paper-dialog {
+        box-shadow: none;
+      }
+      div.page-selector {
+        border-bottom: 1px solid #ddd;
+        margin-left: 24px;
+        margin-right: 24px;
+        padding: 0 0 12px;
+        @apply(--layout-horizontal);
+        @apply(--layout-center-center);
+      }
+      div.page-selector > div {
+        color: #1ddbd8;
+        font-weight: 800;
+        text-transform: uppercase;
+        text-align: center;
+        @apply(--layout-flex);
+      }
+      paper-dialog paper-radio-group {
+        @apply(--layout-vertical);
+      }
+      paper-dialog paper-radio-button {
+        box-sizing: content-box;
+        display: block;
+        text-transform: uppercase;
+        --paper-radio-button-checked-color: #1ddbd8;
+        --paper-radio-button-checked-ink-color: #1ddbd8;
+        @apply(--layout-flex);
+      }
+      paper-dialog paper-icon-button {
+        color: #1ddbd8;
+        font-weight: 800;
+        --paper-icon-button-ink-color: #1ddbd8;
+      }
+      div.pulling-firebase {
+        word-break: break-all;
+        word-wrap: break-word;
+        @apply(--layout-horizontal);
+        @apply(--layout-center-center);
+      }
+      div.pulling-firebase > paper-spinner-lite {
+        margin-right: 16px;
+        --paper-spinner-color: #1ddbd8;
+      }
+      /* hide disabled paper-icon-button */
+      paper-dialog paper-icon-button[disabled] {
+        opacity: 0;
+      }
+
+      /* all data in month related */
+      div.all-data-scrollable-wrapper {
+        overflow: auto;
+      }
+      div.all-data-in-room,
+      div.all-data-in-month,
+      div.all-dates-in-month  {
+        @apply(--layout-horizontal);
+      }
+      div.all-data-container
+      div.all-hours-in-day,
+      div.each-data-in-month {
+        @apply(--layout-vertical);
+      }
+      div.all-hours-in-day {
+        position: absolute;
+        left: 0;
+        margin-top: 8px;
+        background-color: #fff;
+      }
+      div.all-data-container {
+        margin-top: 8px;
+        margin-left: 40px;
+      }
+      div.each-date-in-month,
+      div.each-data-in-hour,
+      div.each-hour-in-day {
+        width: 40px;
+        height: 40px;
+        font-size: 12px;
+        border-bottom: 1px solid #ddd;
+        border-right: 1px solid #ddd;
+        @apply(--layout-vertical);
+        @apply(--layout-center-center);
+      }
+      div.each-hour-in-day,
+      div.each-date-in-month,
+      div.each-data-in-hour {
+        cursor: pointer;
+      }
+      div.each-date-in-month.no-pointer {
+        pointer-events: none;
+      }
+
+      /* results of room related */
+      div.each-data-in-hour.room-available {
+        background-color: #fff;
+      }
+      div.each-data-in-hour.room-reserved {
+        background-color: #F44336;
+      }
+      div.each-data-in-hour.is-weekend {
+        background-color: #f5f5f5;
+        pointer-events: none;
+      }
+      div.each-data-in-hour.pressed {
+        background-color: #bdbdbd;
+      }
+
+      /* removal-dialog related */
+      div.removal-content {
+        width: 240px;
+      }
+
+      /* paper-buttons inside dialogs */
+      .buttons > paper-button {
+        color: #1ddbd8;
+      }
+    </style>
+
+    <firebase-collection id="controlBase" location="[[_controlURL]]" on-firebase-value="_onFirebaseValue"></firebase-collection>
+
+    <app-drawer-layout narrow="{{_isNarrow}}" force-narrow>
+      <app-drawer swipe-open>
+        <app-header-layout>
+          <app-header>
+          </app-header>
+        </app-header-layout>
+      </app-drawer>
+
+      <app-header-layout>
+        <app-header shadow fixed>
+          <app-toolbar>
+            <paper-icon-button icon="icons:menu" drawer-toggle></paper-icon-button>
+            Control Center
+          </app-toolbar>
+          <app-toolbar bottom-item>
+            <paper-icon-button icon="icons:chevron-left" month="last" on-tap="_selectMonth"></paper-icon-button>
+            <div class="selected-info">
+              <paper-button on-tap="_selectionDialog">[[_selectedRoom]]</paper-button>
+              [[_activeFullYear]] [[_computeMonthName(_activeMonth)]]
+            </div>
+            <paper-icon-button icon="icons:chevron-right" month="next" on-tap="_selectMonth"></paper-icon-button>
+          </app-toolbar>
+        </app-header>
+
+        <!-- <iron-scroll-threshold on-lower-threshold="_threshold" on-upper-threshold="_threshold" id="firstThreshold" horizontal> -->
+          <div id="allDataScrollableWrapper" class="all-data-scrollable-wrapper">
+            <div class="all-data-in-room" id="allDataInRoom">
+              <!-- <iron-scroll-threshold scroll-target="firstThreshold" on-lower-threshold="_threshold" on-upper-threshold="_threshold"> -->
+              <div class="all-hours-in-day" id="allHoursInDay" on-down="_onDownData" on-up="_onUpData">
+                <template is="dom-repeat" items="[[_allHoursInDay]]" index-as="index" strip-whitespace>
+                  <div class="each-hour-in-day" cdata="hour" hour-idx="[[index]]">
+                    [[item]]
+                  </div>
+                </template>
+              </div>
+              <!-- </iron-scroll-threshold> -->
+
+              <div class="all-data-container">
+                <div class="all-dates-in-month" on-down="_onDownData" on-up="_onUpData">
+                  <template is="dom-repeat" items="[[_allDatesInMonth]]" index-as="index" strip-whitespace restamp="true">
+                    <div class$="each-date-in-month[[_isDateWeekend(index, _noPointerDates.*)]]" cdata="date" date-idx="[[index]]">
+                      [[item]]
+                    </div>
+                  </template>
+                </div>
+                <div class="all-data-in-month" id="allDataInMonth">
+                  <template is="dom-repeat" items="[[_allDataInMonth]]" index-as="index" strip-whitespace>
+                    <div class$="each-data-in-month[[_isTodayWeekend(item, index)]]" on-down="_onDownData" on-up="_onUpData">
+                      <!-- <iron-list items="[[item]]" class="each-data-list" scroll-target="[[_scroller]]">
+                        <template strip-whitespace>
+                          <semafloor-control-data disabled="[[_isWeekend(item)]]">
+                            <div class$="each-data-in-hour[[_isReserved(item)]]">
+                            </div>
+                          </semafloor-control-data>
+                        </template>
+                      </iron-list> -->
+                      <template is="dom-repeat" items="[[item]]" index-as="index" strip-whitespace>
+                        <div class$="each-data-in-hour[[_isReserved(item)]]" cdata="data" data-idx="[[index]]">
+                        </div>
+                        <!-- <semafloor-control-data disabled="[[_isWeekend(item)]]">
+                        </semafloor-control-data> -->
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        <!-- </iron-scroll-threshold> -->
+      </app-header-layout>
+    </app-drawer-layout>
+
+    <paper-dialog id="selectionDialog" with-backdrop entry-animation="datepicker-slide-from-bottom-animation" exit-animation="datepicker-slide-from-top-animation">
+      <h2>Select a room</h2>
+      <div class="page-selector">
+        <paper-icon-button icon="icons:chevron-left" page="prev" on-tap="_selectPage" disabled="[[_disableChevron(_page, 'site')]]"></paper-icon-button>
+        <div>
+          [[_page]]
+        </div>
+        <paper-icon-button icon="icons:chevron-right" page="next" on-tap="_selectPage" disabled="[[_disableChevron(_page, 'room')]]"></paper-icon-button>
+      </div>
+      <paper-dialog-scrollable>
+        <iron-pages id="pages" selected="{{_page}}" attr-for-selected="page">
+          <div page="site">
+            <paper-radio-group selected="{{_activeSite}}">
+              <template is="dom-repeat" items="[[_allsites]]" index-as="index">
+                <paper-radio-button name="[[item]]" label="[[item]]">[[item]]</paper-radio-button>
+              </template>
+            </paper-radio-group>
+          </div>
+          <div page="floor">
+            <paper-radio-group selected="{{_activeFloor}}">
+              <template is="dom-repeat" items="[[_allfloors]]" index-as="index">
+                <paper-radio-button name="[[item]]" label="[[item]]">[[item]]</paper-radio-button>
+              </template>
+            </paper-radio-group>
+          </div>
+          <div page="room">
+            <paper-radio-group selected="{{_activeRoom}}">
+              <template is="dom-repeat" items="[[_allrooms]]" index-as="index">
+                <paper-radio-button name="[[item]]" label="[[item]]">[[item]]</paper-radio-button>
+              </template>
+            </paper-radio-group>
+          </div>
+        </iron-pages>
+      </paper-dialog-scrollable>
+      <div class="buttons">
+        <paper-button dialog-dismiss>cancel</paper-button>
+        <paper-button dialog-confirm on-transitionend="_confirmSelectedRoom">ok</paper-button>
+      </div>
+    </paper-dialog>
+
+    <paper-dialog id="pullingFirebase" modal="[[_isLoading]]" class="pulling-firebase" entry-animation="datepicker-slide-from-bottom-animation" exit-animation="datepicker-slide-from-top-animation">
+      <h2>[[_pullingTitle]]</h2>
+      <div class="pulling-firebase">
+        <paper-spinner-lite active="[[_isLoading]]"></paper-spinner-lite>
+        [[_pullingMsg]]
+      </div>
+    </paper-dialog>
+
+    <paper-dialog id="removalDialog" modal entry-animation="datepicker-slide-from-bottom-animation" exit-animation="datepicker-slide-from-top-animation">
+      <h2>[[_removalTitle]]</h2>
+      <template is="dom-if" if="[[_removalOption]]" restamp="true">
+        <div class="page-selector">
+          <paper-icon-button icon="icons:chevron-left" disabled="[[_disableChevron(_removalConfirm, 'add')]]" removal="add" on-tap="_computeRemoval"></paper-icon-button>
+          <div>
+            [[_removalConfirm]]
+          </div>
+          <paper-icon-button icon="icons:chevron-right" disabled="[[_disableChevron(_removalConfirm, 'remove')]]" removal="remove" on-tap="_computeRemoval"></paper-icon-button>
+        </div>
+      </template>
+      <div class="removal-content">
+        <template is="dom-if" if="[[_singleData]]" restamp="true">
+          [[_removalMsg]]
+          <ul>
+            <li>[[_removalDate]]</li>
+            <li>[[_removalTime]]</li>
+          </ul>
+        </template>
+        <template is="dom-if" if="[[_singleDay]]" restamp="true">
+          [[_removalMsg]]
+          <ul>
+            <li>[[_removalDate]]</li>
+          </ul>
+        </template>
+        <template is="dom-if" if="[[_singleHour]]" restamp="true">
+          [[_removalMsg]]
+          <ul>
+            <li>[[_removalTime]]</li>
+          </ul>
+        </template>
+      </div>
+      <div class="buttons">
+        <paper-button dialog-dismiss>cancel</paper-button>
+        <paper-button dialog-confirm on-transitionend="_confirmRemoveData">[[_removalConfirm]]</paper-button>
+      </div>
+    </paper-dialog>
+
+    <paper-toast id="controlToast" text="Update successfully!"></paper-toast>
+
+  </template>
+
+  <script>
+    Polymer({
+      is: 'semafloor-control-center',
+
+      properties: {
+        _isNarrow: Boolean,
+        _isLoading: {
+          type: Boolean,
+          value: false
+        },
+
+        _pullingTitle: {
+          type: String,
+          value: ''
+        },
+        _pullingMsg: {
+          type: String,
+          value: ''
+        },
+
+        _resetViewAfterAllDataInMonth: {
+          type: Boolean,
+          value: true
+        },
+
+        _birdMigration: {
+          type: Boolean,
+          value: false
+        },
+
+        _noPointerDates: {
+          type: Array,
+          value: function() {
+            return [];
+          }
+        },
+
+        // _insertionMsg: {
+        //   type: String,
+        //   value: ''
+        // },
+        // _insertionDate: {
+        //   type: String,
+        //   value: ''
+        // },
+        // _insertionTime: {
+        //   type: String,
+        //   value: ''
+        // },
+
+        _removalTitle: {
+          type: String,
+          value: ''
+        },
+        _removalMsg: {
+          type: String,
+          value: ''
+        },
+        _removalDate: {
+          type: String,
+          value: ''
+        },
+        _removalTime: {
+          type: String,
+          value: ''
+        },
+        _removalConfirm: {
+          type: String,
+          value: ''
+        },
+        _removalOption: {
+          type: Boolean,
+          value: false
+        },
+
+        _singleData: {
+          type: Boolean,
+          value: false
+        },
+        _singleDay: {
+          type: Boolean,
+          value: false
+        },
+        _singleHour: {
+          type: Boolean,
+          value: false
+        },
+        // _allData: {
+        //   type: Boolean,
+        //   value: false
+        // },
+        // _scroller: {
+        //   type: Object,
+        //   value: function() {
+        //     return this;
+        //   }
+        // },
+
+        _monthNames: {
+          type: Array,
+          value: function() {
+            return ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+              'september', 'october', 'november', 'december'];
+          }
+        },
+        _page: {
+          type: String,
+          value: 'room'
+        },
+
+        _activeSite: {
+          type: String,
+          value: 'KLB - Tower 5'
+        },
+        _activeFloor: {
+          type: String,
+          value: 'level 1'
+        },
+        _activeRoom: {
+          type: String,
+          value: 'taipei 101'
+        },
+        _selectedSite: {
+          type: String,
+          value: 'KLB - Tower 5'
+        },
+        _selectedFloor: {
+          type: String,
+          value: 'level 1'
+        },
+        _selectedRoom: {
+          type: String,
+          value: 'taipei 101'
+        },
+
+        _allsites: {
+          type: Array,
+          value: function() {
+            return ['KLB - Tower 5', 'KLB - Tower 2A', 'SUITE'];
+          }
+        },
+        _allfloors: {
+          type: Array,
+          value: function() {
+            return ['level 1', 'level 2', 'level 3', 'level 3A', 'level 5', 'level 6', 'level 7',
+              'level 8', 'level 9', 'level 10', 'level 11', 'level 12'];
+          }
+        },
+        _allrooms: {
+          type: Array,
+          value: function() {
+            return ['freedom tower', 'willis tower', 'taipei 101', 'the shard', 'twin towers'];
+          }
+        },
+        _dataDialog: {
+          type: Array,
+          value: function() {
+            return [];
+          }
+        },
+
+        _activeMonth: {
+          type: Number,
+          value: function() {
+            var _month = new Date().getMonth();
+            return _month;
+          }
+        },
+        _activeFullYear: {
+          type: Number,
+          value: function() {
+            var _fullyear = new Date().getFullYear();
+            return _fullyear;
+          }
+        },
+
+        _allDatesInMonth: {
+          type: Array,
+          value: function() {
+            var _month = new Date().getMonth();
+            var _fullyear = new Date().getFullYear();
+            var _totalDays = 31;
+            var _datesArray = [];
+            if (_month === 3 || _month === 5 || _month === 8 || _month === 10) {
+              _totalDays = 30;
+            }else if (_month === 1) {
+              _totalDays = new Date(_fullyear, 1, 29).getMonth() === 1 ? 29 : 28;
+            }
+            for (var i = 1; i <= _totalDays; i++) {
+              _datesArray.push(i);
+            }
+            return _datesArray;
+          }
+        },
+        _allHoursInDay: {
+          type: Array,
+          value: function() {
+            var _hoursArray = [];
+            for (var i = 8, j = 0; i < 24;j += 30) {
+              if (j === 60) {
+                j = 0;
+                i++;
+              }
+              if (i < 24) {
+                var _hourString = _.padStart(i, 2, '0');
+                var _minString = _.padStart(j, 2, '0');
+                var _fulltime = [_hourString, _minString].join(':');
+                _hoursArray.push(_fulltime);
+              }
+            }
+            _hoursArray.unshift('');
+            return _hoursArray;
+          }
+        },
+        _allDataInMonth: {
+          type: Array,
+          value: function() {
+            // TODO: all dates in Firebase
+            var _month = new Date().getMonth();
+            var _fullyear = new Date().getFullYear();
+            var _totalDays = 31;
+            var _datesArray = [];
+            if (_month === 3 || _month === 5 || _month === 8 || _month === 10) {
+              _totalDays = 30;
+            }else if (_month === 1) {
+              _totalDays = new Date(_fullyear, 1, 29).getMonth() === 1 ? 29 : 28;
+            }
+            var _ea = _.chain(Array(_totalDays)).fill(0).join('').padStart(32, 1).split('').value();
+            var _adim = _.chain(Array(_totalDays)).fill(_ea).value();
+            return _.shuffle(_adim);
+          }
+        },
+        // _allDataInDay: {
+        //   type: Array,
+        //   value: function() {
+        //     // TODO: all Firebase data in each date.
+        //     return _.fill(Array(32), 0);
+        //   }
+        // },
+
+        _controlURL: {
+          type: String,
+          value: 'https://polymer-semaphore.firebaseio.com'
+        },
+        _monthSnapshot: {
+          type: Object,
+          value: function() {
+            return {};
+          }
+        },
+
+      },
+
+      listeners: {
+        'app-header-reset-layout': '_onAppHeaderResetLayout',
+        'app-drawer-reset-layout': '_onAppDrawerResetLayout',
+
+        'selectionDialog.iron-overlay-opened': '_disableDocumentScrolling',
+        'selectionDialog.iron-overlay-canceled': '_restoreDocumentScrolling',
+        'selectionDialog.iron-overlay-closed': '_restoreDocumentScrolling',
+
+        'pullingFirebase.iron-overlay-opened': '_disableDocumentScrolling',
+        'pullingFirebase.iron-overlay-canceled': '_restoreDocumentScrolling',
+        'pullingFirebase.iron-overlay-closed': '_restoreDocumentScrolling',
+
+        'removalDialog.iron-overlay-opened': '_disableDocumentScrolling',
+        'removalDialog.iron-overlay-canceled': '_restoreDocumentScrolling',
+        'removalDialog.iron-overlay-closed': '_restoreDocumentScrolling',
+
+        'touchmove': '_onTouchMove',
+      },
+
+      observers: [
+        '_updateLayout(_isNarrow)',
+        '_goNextPage(_activeSite, "site")',
+        '_goNextPage(_activeFloor, "floor")',
+        '_updateDataDialog(_page)',
+        // '_computeAllDates(_activeFullYear, _activeMonth, _selectedSite, _selectedFloor, _selectedRoom)',
+        '_updateFirebaseURL(_activeMonth)',
+        '_filterRoomData(_selectedRoom, _monthSnapshot)',
+        '_computeDatesInMonth(_activeMonth)'
+      ],
+
+      _onAppDrawerResetLayout: function() {
+        console.log('app-drawer-reset-layout');
+      },
+      _onAppHeaderResetLayout: function() {
+        console.log('app-header-reset-layout');
+      },
+
+      // Element Lifecycle
+
+      ready: function() {
+        // `ready` is called after all elements have been configured, but
+        // propagates bottom-up. This element's children are ready, but parents
+        // are not.
+        //
+        // This is the point where you should make modifications to the DOM (when
+        // necessary), or kick off any processes the element wants to perform.
+        console.log('app-ready');
+      },
+
+      attached: function() {
+        // `attached` fires once the element and its parents have been inserted
+        // into a document.
+        //
+        // This is a good place to perform any work related to your element's
+        // visual state or active behavior (measuring sizes, beginning animations,
+        // loading resources, etc).
+        console.log('app-attached');
+        // Always scroll to top on attached.
+        window.scrollTo(0, 0);
+        this.$.allDataScrollableWrapper.scrollLeft = 0;
+      },
+
+      detached: function() {
+        // The analog to `attached`, `detached` fires when the element has been
+        // removed from a document.
+        //
+        // Use this to clean up anything you did in `attached`.
+      },
+
+      _updateLayout: function(_isNarrow) {
+        console.log('isNarrow: ', _isNarrow);
+      },
+
+      _selectionDialog: function() {
+        var _page = this._page;
+        var _selectionDialog = this.$.selectionDialog;
+        this.set('_dataDialog', this['_all' + _page + 's']);
+        this.debounce('openDialog', function() {
+          // Exit animation is probably still running at this stage.
+          // Cancel it before opening next dialog.
+          _selectionDialog.cancelAnimation();
+          _selectionDialog.open();
+        }, 1);
+      },
+
+      _disableChevron: function(_page, _compare) {
+        return _page === _compare;
+      },
+
+      _selectPage: function(ev) {
+        var _target = ev.target;
+
+        while (_target && _target.tagName !== 'PAPER-ICON-BUTTON') {
+          _target = _target.parentElement;
+        }
+
+        if (_target && _target.hasAttribute('page')) {
+          var _page = _target.getAttribute('page');
+          _page === 'next' ? this.$$('#pages').selectNext() : this.$$('#pages').selectPrevious();
+          // _page === 'next' ? this.$.pages.selectNext() : this.$.pages.selectPrevious();
+          // update data dialog after select next page.
+        }
+      },
+
+      _goNextPage: function(_selected, _which) {
+        if (this.isAttached && this._page === _which) {
+          this.$$('#pages').selectNext();
+          // this.$.pages.selectNext();
+          // update data dialog after select next page.
+        }
+      },
+
+      _updateDataDialog: function(_page) {
+        var _dataDialog = '_all' + _page + 's';
+        this.set('_dataDialog', this[_dataDialog]);
+        this.debounce('resizeDialog', function() {
+          console.log('resize-dialog');
+          this.$.selectionDialog.notifyResize();
+        }, 1);
+      },
+
+      _selectMonth: function(ev) {
+        var _target = ev.target;
+
+        while (_target && _target.tagName !== 'PAPER-ICON-BUTTON') {
+          _target = _target.parentElement;
+        }
+
+        if (_target && _target.hasAttribute('month')) {
+          var _month = _target.getAttribute('month');
+          var _activeMonth = this._activeMonth;
+          // var _activeFullYear = this._activeFullYear;
+          var _varyMonth = _month === 'last' ? --_activeMonth : ++_activeMonth;
+          if (_varyMonth > 11) {
+            var _activeFullYear = this._activeFullYear;
+            this.set('_activeFullYear', ++_activeFullYear);
+            _varyMonth = 0;
+          }else if (_varyMonth < 0) {
+            var _activeFullYear = this._activeFullYear;
+            this.set('_activeFullYear', --_activeFullYear);
+            _varyMonth = 11;
+          }
+          // Update month.
+          this.set('_activeMonth', _varyMonth);
+          // update _activeFullYear once _activeMonth changes in value.
+        }
+      },
+      _computeDatesInMonth: function(_activeMonth) {
+        if (_.isUndefined(_activeMonth) || _.isUndefined(this._activeFullYear)) {
+          return;
+        }
+
+        var _temp = [];
+        var _activeFullYear = this._activeFullYear;
+        var _totalDays = this._computeTotalDays(_activeFullYear, _activeMonth);
+        for (var i = 1; i <= _totalDays; i++) {
+          _temp.push(i);
+        }
+        // return _temp;
+        // Update dates in month.
+        this.set('_allDatesInMonth', _temp);
+      },
+      _computeMonthName: function(_activeMonth) {
+        var _monthNames = this._monthNames;
+        return _monthNames[_activeMonth];
+      },
+      _computeTotalDays: function(_fullyear, _month) {
+        var _totalDays = 31;
+        var _datesArray = [];
+        if (_month === 3 || _month === 5 || _month === 8 || _month === 10) {
+          _totalDays = 30;
+        }else if (_month === 1) {
+          _totalDays = new Date(_fullyear, 1, 29).getMonth() === 1 ? 29 : 28;
+        }
+        return _totalDays;
+      },
+      _computeWeek: function(_date) {
+        // Get week number of a day.
+        var _now = new Date(_date);
+        _now = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() - _now.getDay() + 4);
+        var _onejan = new Date(_now.getFullYear(), 0, 1);
+        return Math.ceil(((_now - _onejan) / 86400000 + 1) / 7);
+      },
+
+      _isReserved: function(_item) {
+        if (_.isEmpty(_item)) {
+          return ' is-weekend';
+        }else {
+          return +_item ? ' room-reserved' : ' room-available';
+        }
+      },
+      _isWeekend: function(_item) {
+        return _.isEmpty(_item);
+      },
+      _isTodayWeekend: function(_item, _index) {
+        var _isTodayWeekend = _.isEmpty(_.head(_item));
+        if (_isTodayWeekend) {
+          // Push those dates are weekend.
+          this.push('_noPointerDates', _index);
+        }
+      },
+      _isDateWeekend: function(_index, _noPointerDates) {
+        var _npd = _noPointerDates.base;
+        // set no pointer-events for weekend dates.
+        var _weekendDetected = _npd.some(function(n) {
+          return n === _index;
+        });
+        return _weekendDetected ? ' no-pointer' : '';
+      },
+
+      _updateFirebaseURL: function(_activeMonth) {
+        var _baseRef = 'https://polymer-semaphore.firebaseio.com/mockMessages';
+        var _activeFullYear = this._activeFullYear || new Date().getFullYear();
+        var _monthNames = this._monthNames;
+        var _mm =  _.padStart(_activeMonth, 2, '0') + _monthNames[_activeMonth];
+        var _newRef = [
+          _baseRef, _activeFullYear, _mm
+        ].join('/');
+        var _pullingFirebase = this.$.pullingFirebase;
+        console.log(_newRef);
+
+        // Open loading screen when pulling new data from Firebase.
+        this.set('_isLoading', true);
+        // Set pullingFirebase title.
+        this.set('_pullingTitle', 'Retrieving data');
+        this.set('_pullingMsg', 'Loading...');
+          this.debounce('openDialog', function() {
+            // Exit animation is probably still running at this stage.
+            // Cancel it before opening next dialog.
+            _pullingFirebase.cancelAnimation();
+            _pullingFirebase.open();
+            console.log('pull-fire-open');
+            // Enable reset view on pulling Firebase data.
+            this.set('_resetViewAfterAllDataInMonth', true);
+            // After dialog is opened around 600ms, only can the new url be set.
+            this.debounce('loadingFirebase', function() {
+              console.log('control-url');
+              this.set('_controlURL', _newRef);
+            }, 600);
+          }, 1);
+      },
+      _onFirebaseValue: function(ev) {
+        console.log(ev.detail.val());
+        var _monthSnapshot = ev.detail.val();
+
+        this.set('_monthSnapshot', _monthSnapshot);
+        // Run _filterRoomData once new _monthSnapshot is set.
+        if (this._resetViewAfterAllDataInMonth) {
+          this.debounce('firebaseDone', function() {
+            this.$.pullingFirebase.close();
+            // window scrolls Y to 0 while allDataScrollableWrapper scrolls X to 0.
+            window.scrollTo(0, 0);
+            this.$.allDataScrollableWrapper.scrollLeft = 0;
+            // Restore reset view to normal.
+            this.set('_resetViewAfterAllDataInMonth', false);
+          }, 250);
+        }
+      },
+      _filterRoomData: function(_selectedRoom, _monthSnapshot) {
+        if (_.isEmpty(_monthSnapshot)) {
+          return;
+        }
+
+        // Get codename from sitename.
+        function _siteToCode(_siteName) {
+          var _siteNames = ['KLB - Tower 5', 'KLB - Tower 2A', 'SUITE'];
+          var _siteCodes = ['alpha', 'beta', 'gamma'];
+          var _idx = _siteNames.indexOf(_siteName);
+          return _idx < 0 ? 'alpha' : _siteCodes[_idx];
+        }
+        // Get codename from floorname.
+        function _floorToCode(_floorName) {
+          var _codeNames = ['01level', '02level', '03level', '04level', '05level', '06level',
+            '07level', '08level', '09level', '10level', '11level', '12level'];
+          var _floorNames = ['level 1', 'level 2', 'level 3', 'level 3A', 'level 5', 'level 6',
+            'level 7', 'level 8', 'level 9', 'level 10', 'level 11', 'level 12'];
+          var _idx = _floorNames.indexOf(_floorName);
+          return _idx < 0 ? '12level' : _codeNames[_idx];
+        }
+
+        var _tempArray = [];
+        var _nullFilled = _.fill(Array(32), '');
+        var _site = _siteToCode(this._selectedSite);
+        var _floor = _floorToCode(this._selectedFloor);
+        var _room = this._selectedRoom;
+        var _sortedSnapshot = _.sortBy(_monthSnapshot);
+        var _wwLen = _sortedSnapshot.length;
+
+        // if week52 or week53 from last year presents in 00january keys' stack,
+        // makes it first in the collection.
+        // Logical operators: && has higher precedence than ||.
+        var _isWeek53Present = this._activeMonth === 0 && (_.keys(_monthSnapshot).includes('week53') || _.keys(_monthSnapshot).includes('week52'));
+        if (_isWeek53Present) {
+          // take everything except the last element.
+          var _initialSort = _.initial(_sortedSnapshot);
+          // take only the last element.
+          var _lastSort = _.last(_sortedSnapshot);
+          // push the last element into the initials.
+          _initialSort.unshift(_lastSort);
+          // reassign resulted array.
+          _sortedSnapshot = _initialSort;
+        }
+
+        for (var i = 0; i < _wwLen; i++) { // 5
+          var _ddTemp = _sortedSnapshot[i];
+          var _ddKeys = _.chain(_ddTemp).keys().sortBy().value();
+          var _ddLen = _.keys(_ddTemp).length;
+          for (var j = 0; j < _ddLen; j++) { // max 7
+            var _rr = _ddTemp[_ddKeys[j]];
+            if (_rr.day === 'Sunday' || _rr.day === 'Saturday') {
+              _tempArray.push(_nullFilled);
+            }else {
+              var _tt = _rr.site[_site][_floor][_room].time;
+              var _timeBin = parseInt(_tt, 16).toString(2);
+              var _timeArray = _.chain(_timeBin).padStart(32, '0').split('').value();
+              _tempArray.push(_timeArray);
+            }
+          }
+        }
+        // Clear _noPointerDates array on each new data.
+        this.set('_noPointerDates', []);
+        // Update _allDataInMonth with new data.
+        this.set('_allDataInMonth', _tempArray);
+        if (this._resetViewAfterAllDataInMonth) {
+          this.debounce('', function() {
+            window.scrollTo(0, 0);
+            this.$.allDataScrollableWrapper.scrollLeft = 0;
+            this.set('_resetViewAfterAllDataInMonth', false);
+          }, 250);
+        }
+      },
+
+      _confirmSelectedRoom: function(ev) {
+        var _target = ev.target;
+
+        if (_target && _target.tagName === 'PAPER-RIPPLE') {
+          // Enable reset view on room change.
+          this.set('_resetViewAfterAllDataInMonth', true);
+          this.debounce('rippleEnd', function() {
+            var _activeSite = this._activeSite;
+            var _activeFloor = this._activeFloor;
+            var _activeRoom = this._activeRoom;
+
+            this.set('_selectedSite', _activeSite);
+            this.set('_selectedFloor', _activeFloor);
+            this.set('_selectedRoom', _activeRoom);
+            // Reset scrollers to (0, 0) after data update.
+          }, 1);
+        }
+      },
+
+      _restoreDocumentScrolling: function(ev) {
+        var _dialogId = ev.target.id;
+        var _controlToast = this.$.controlToast;
+        document.body.style.overflow = '';
+
+        // Explicitly falsify _isLoading when pullingFirebase dialog is closed.
+        if (_dialogId === 'pullingFirebase' && this._isLoading) {;
+          this.set('_isLoading', false);
+
+          if (!_.includes(_.toLower(this._pullingTitle), 'retrieving')) {
+            // Open control toast once update is done.
+            if (_controlToast.opened) {
+              _controlToast.close();
+            }
+            _controlToast.open();
+          }
+        }
+      },
+      _disableDocumentScrolling: function() {
+        document.body.style.overflow = 'hidden';
+      },
+
+      _onDownData: function(ev) {
+        // debounce 10ms of down.
+        this.debounce('debounceDown', function() {
+          var _target = ev.target;
+
+          if (_target && _target.hasAttribute('cdata')) {
+            var _cdata = _target.getAttribute('cdata');
+            var _idx;
+            var _calculatedTime;
+            var _calculatedHour;
+            var _calculatedMin;
+            var _calculatedDate;
+            var _removalTitle;
+            var _removalMsg;
+            var _removalDate;
+            var _removalTime;
+            var _removalConfirm;
+            var _removalOption;
+            if (_cdata === 'date') {
+              _idx = _target.dateIdx;
+              var _eachDataInMonth = Polymer.dom(this.$.allDataInMonth).querySelectorAll('.each-data-in-month')[_idx];
+              var _eachDataInHour = Polymer.dom(_eachDataInMonth).querySelectorAll('.each-data-in-hour');
+              var _edihLen = _eachDataInHour.length;
+              if (_eachDataInHour[0].classList.contains('is-weekend')) {
+                return;
+              }
+              for (var i = 0; i < _edihLen; i++) {
+                this.toggleClass('pressed', true, _eachDataInHour[i]);
+              }
+
+              _calculatedDate = [this._activeFullYear, _.padStart(this._activeMonth + 1, 2, '0'), _.padStart(_idx + 1, 2, '0')].join('-');
+              _removalTitle = 'Remove all reservations?';
+              _removalMsg = 'Remove all reservations on: ';
+              _removalDate = _calculatedDate;
+              _removalConfirm = 'remove';
+              _removalOption = true;
+            }else if (_cdata === 'hour') {
+              _idx = _target.hourIdx - 1;
+
+              // Select all hour data.
+              if (_idx < 0) {
+                var _eachDataInHour = Polymer.dom(this.$.allDataInMonth).querySelectorAll('.each-data-in-hour');
+                var _edihLen = _eachDataInHour.length;
+                var _mm = this._activeMonth;
+                var _yy = this._activeFullYear;
+                for (var i = 0; i < _edihLen; i++) {
+                  this.toggleClass('pressed', true, _eachDataInHour[i]);
+                }
+                _removalTitle = 'Remove all reservations?';
+                _removalMsg = [
+                  'Remove all reservations in',
+                  _.startCase(this._computeMonthName(_mm)),
+                  _yy + '?'
+                ].join(' ');
+                _removalDate = [
+                  [_yy, _.padStart(_mm + 1, 2, '0'), '01'].join('-'),
+                  [_yy, _.padStart(_mm + 1, 2, '0'), this._computeTotalDays(_yy, _mm)].join('-')
+                ].join(' - ');
+                _removalTime = [
+                  '08:00', '23:30'
+                ].join(' - ');
+                _removalConfirm = 'remove';
+                _removalOption = true;
+              }else {
+                var _eachDataInMonth = Polymer.dom(this.$.allDataInMonth).querySelectorAll('.each-data-in-month');
+                var _edimLen = _eachDataInMonth.length;
+                for (var i = 0; i < _edimLen; i++) {
+                  var _eachDataInHour = Polymer.dom(_eachDataInMonth[i]).querySelectorAll('.each-data-in-hour')[_idx];
+                  var _isWeekend = _eachDataInHour.classList.contains('is-weekend');
+                  if (!_isWeekend) {
+                    this.toggleClass('pressed', true, _eachDataInHour);
+                  }
+                }
+
+                _calculatedTime = 480 + _idx * 30;
+                _calculatedHour = _.padStart(Math.floor(_calculatedTime / 60), 2, '0');
+                _calculatedMin = _.padStart(_calculatedTime % 60, 2, '0');
+                _removalTitle = 'Remove all reservations?';
+                _removalMsg = 'Remove all reservations at: ';
+                _removalTime = [_calculatedHour, _calculatedMin].join(':');
+                _removalConfirm = 'remove';
+                _removalOption = true;
+              }
+            }else {
+              var _dataIdx = _target.dataIdx;
+              _idx = ev.model.index;
+              _calculatedDate = [this._activeFullYear, _.padStart(this._activeMonth + 1, 2, '0'), _.padStart(_idx + 1, 2, '0')].join('-');
+              _calculatedTime = 480 + _dataIdx * 30;
+              _calculatedHour = _.padStart(Math.floor(_calculatedTime / 60), 2, '0');
+              _calculatedMin = _.padStart(_calculatedTime % 60, 2, '0');
+              // if an item was found had class 'room-reserved', only can it be removed.
+              if (_target.classList.contains('room-reserved')) {
+                _removalTitle = 'Remove reservations?';
+                _removalMsg = 'Remove selected reservation:';
+                _removalDate = _calculatedDate;
+                _removalTime = [_calculatedHour, _calculatedMin].join(':');
+                _removalConfirm = 'remove';
+                _removalOption = false;
+              }else {
+                _removalTitle = 'Add reservations?';
+                _removalMsg = 'Add selected reservation:';
+                _removalDate = _calculatedDate;
+                _removalTime = [_calculatedHour, _calculatedMin].join(':');
+                _removalConfirm = 'add';
+                _removalOption = false;
+              }
+              // this.set('_removalOption', false);
+              this.toggleClass('pressed', true, _target);
+            }
+            // Set all bindings.
+            this.set('_removalTitle', _removalTitle);
+            this.set('_removalMsg', _removalMsg);
+            this.set('_removalDate', _removalDate);
+            this.set('_removalTime', _removalTime);
+            this.set('_removalConfirm', _removalConfirm);
+            this.set('_removalOption', _removalOption);
+
+            // Reset touchmove blocker.
+            this.set('_birdMigration', false);
+          }
+        }, 10);
+      },
+      _onUpData: function(ev) {
+        // debounce 10ms of up.
+        this.debounce('debounceUp', function() {
+          var _target = ev.target;
+
+          if (_target && _target.hasAttribute('cdata')) {
+            // if touchmoved, abort operation.
+            if (this._birdMigration) {
+              return;
+            }
+
+            var _cdata = _target.getAttribute('cdata');
+            var _idx = _target.dateIdx;
+            var _removalDialog = this.$.removalDialog;
+            if (_cdata === 'date') {
+              var _eachDataInMonth = Polymer.dom(this.$.allDataInMonth).querySelectorAll('.each-data-in-month')[_idx];
+              var _eachDataInHour = Polymer.dom(_eachDataInMonth).querySelectorAll('.each-data-in-hour');
+              var _edihLen = _eachDataInHour.length;
+              if (_eachDataInHour[0].classList.contains('is-weekend')) {
+                return;
+              }
+              for (var i = 0; i < _edihLen; i++) {
+                this.toggleClass('pressed', false, _eachDataInHour[i]);
+              }
+
+              // Falsify unused.
+              this.set('_singleData', false);
+              this.set('_singleHour', false);
+              // Truthify the important one.
+              this.set('_singleDay', true);
+            }else if (_cdata === 'hour') {
+              var _idx = _target.hourIdx - 1;
+              // Select all hour data.
+              if (_idx < 0) {
+                var _eachDataInHour = Polymer.dom(this.$.allDataInMonth).querySelectorAll('.each-data-in-hour');
+                var _edihLen = _eachDataInHour.length;
+                for (var i = 0; i < _edihLen; i++) {
+                  this.toggleClass('pressed', false, _eachDataInHour[i]);
+                }
+
+                // Falsify unused.
+                this.set('_singleDay', false);
+                this.set('_singleHour', false);
+                // Truthify the important one.
+                this.set('_singleData', true);
+              }else {
+                var _eachDataInMonth = Polymer.dom(this.$.allDataInMonth).querySelectorAll('.each-data-in-month');
+                var _edimLen = _eachDataInMonth.length;
+                for (var i = 0; i < _edimLen; i++) {
+                  var _eachDataInHour = Polymer.dom(_eachDataInMonth[i]).querySelectorAll('.each-data-in-hour')[_idx];
+                  var _isWeekend = _eachDataInHour.classList.contains('is-weekend');
+                  if (!_isWeekend) {
+                    this.toggleClass('pressed', false, _eachDataInHour);
+                  }
+                }
+
+                // Falsify unused.
+                this.set('_singleData', false);
+                this.set('_singleDay', false);
+                // Truthyify the important one.
+                this.set('_singleHour', true);
+              }
+            }else {
+              this.toggleClass('pressed', false, _target);
+              // Falsify unused.
+              this.set('_singleDay', false);
+              this.set('_singleHour', false);
+              // Truthyify the important one.
+              this.set('_singleData', true);
+            }
+
+            // After all the above functions run completely, check if touchmove activated.
+            // Another check for touchmove event just in case before opening dialog.
+            if (!this._birdMigration) {
+              this.debounce('', function() {
+                // Exit animation is probably still running at this stage.
+                // Cancel it before opening next dialog.
+                _removalDialog.cancelAnimation();
+                _removalDialog.open();
+              }, 1);
+            }
+          }
+        }, 10);
+      },
+      _onTouchMove: function(ev) {
+        // Debounce 1ms of touchevent so that it's fast enough to cancel up handler.
+        // While down and up handlers are both 10ms of debounce rate.
+        this.debounce('', function() {
+          this.set('_birdMigration', true);
+        }, 1);
+      },
+
+      _computeRemovalOption: function(_removalConfirm) {
+        return _removalConfirm === 'remove' ? 'add' : 'remove';
+      },
+      _computeRemoval: function(ev) {
+        var _target = ev.target;
+
+        while (_target && _target.tagName !== 'PAPER-ICON-BUTTON') {
+          _target = _target.parentElement;
+        }
+
+        if (_target && _target.hasAttribute('removal')) {
+          var _removal = _target.getAttribute('removal');
+          var _removalTitle = _.lowerFirst(this._removalTitle);
+          var _removalMsg = _.lowerFirst(this._removalMsg);
+          var _removalConfirm = this._removalConfirm;
+          var _removalArray = [_removalTitle, _removalMsg, _removalConfirm];
+          var _replacer = _removalConfirm === 'remove' ? 'add' : 'remove';
+          // Replace 'remove' string with 'add' and vice versa.
+          _removalArray = _.map(_removalArray, function(n) {
+            return _.replace(n, _removalConfirm, _replacer);
+          });
+          // Set replaced strings.
+          this.set('_removalTitle', _.upperFirst(_removalArray[0]));
+          this.set('_removalMsg', _.upperFirst(_removalArray[1]));
+          this.set('_removalConfirm', _removalArray[2]);
+          // Resize dialog.
+          this.debounce('resizeRemoval', function() {
+            this.$.removalDialog.notifyResize();
+          }, 1);
+        }
+      },
+      _confirmRemoveData: function(ev) {
+        // Setting.
+        var _removeRef = new Firebase(this._controlURL);
+        var _singleData = this._singleData;
+        var _singleDay = this._singleDay;
+        var _singleHour = this._singleHour;
+        var _removalConfirm = this._removalConfirm;
+        var _removalOption = this._removalOption;
+        var _removalDate = this._removalDate;
+        var _removalTime = this._removalTime;
+        var _selectedSite = this._selectedSite;
+        var _selectedFloor = this._selectedFloor;
+        var _selectedRoom = this._selectedRoom;
+        var _activeFullYear = this._activeFullYear;
+        var _activeMonth = this._activeMonth;
+        var _ww = this._computeWeek(_removalDate);
+        var _computeTotalDays = this._computeTotalDays;
+        var _computeWeek = this._computeWeek;
+        var _pullingFirebase = this.$.pullingFirebase;
+        var _that = this;
+
+        // Open scrim dialog aka pullingFirebase (reusable)
+        // to block further user input/ interaction on the screen until committed.
+        function _openScrimDialog() {
+          _that.set('_pullingTitle', _removalConfirm === 'remove' ? 'Removing data' : 'Adding data');
+          _that.set('_pullingMsg', 'Updating...');
+          _that.set('_isLoading', true);
+
+          // Exit animation is probably still running at this stage.
+          // Cancel it before opening next dialog.
+          _pullingFirebase.cancelAnimation();
+          // DOUBT: Suprisingly, dialog can be opened directly without delay.
+          _pullingFirebase.open();
+        }
+
+        function _closeScrimDialog() {
+          _that.debounce('', function() {
+            _pullingFirebase.close();
+            console.log('pull-fire-close');
+          }, 1);
+        }
+
+        // [_singleData, _singleDay, _singleHour, _removalOption]
+        //            0           0            1               1 - _removeSingleHour
+        //            0           1            0               1 - _removeSingleDay
+        //            1           0            0               0 - _removeSingleData
+        //            1           0            0               1 - _removeAllDay
+        function _filterRemovalType(_singleData, _singleDay, _singleHour, _removalConfirm, _removalOption, _removalDate, _removalTime, _selectedSite, _selectedFloor, _selectedRoom, _ww) {
+          // Open scrim dialog when updating data.
+          _openScrimDialog();
+          _that.debounce('', function() {
+            if (_singleData) {
+              // If _removalOption, add/ remove single reservation on [date] at [time];
+              // Else add/ remove all reservations on all [date] at all [time];
+              _removalOption ?
+              _removeSingleHour(_removalConfirm, _removalTime, _selectedSite, _selectedFloor, _selectedRoom, _activeFullYear, _activeMonth, _computeTotalDays, _computeWeek, true) :
+              _removeSingleData(_removalConfirm, _removalDate, _removalTime, _selectedSite, _selectedFloor, _selectedRoom, _ww) ;
+            }else if (_singleDay) {
+              // Add/ remove all reservations on [date] at all [time];
+              _removeSingleDay(_removalConfirm, _removalDate, _selectedSite, _selectedFloor, _selectedRoom, _ww);
+            }else if (_singleHour){
+              // Add/ remove all reservations at [time] on all [date];
+              _removeSingleHour(_removalConfirm, _removalTime, _selectedSite, _selectedFloor, _selectedRoom, _activeFullYear, _activeMonth, _computeTotalDays, _computeWeek);
+            }
+          }, 600);
+        }
+
+        // Remove single data on [date] at [time] of a [room].
+        function _removeSingleData(_removalConfirm, _removalDate, _removalTime, _selectedSite, _selectedFloor, _selectedRoom, _ww) {
+          var _childRef = [
+            'week' + _.padStart(_ww, 2, '0'),
+            _removalDate.slice(-2),
+            'site',
+            _siteToCode(_selectedSite),
+            _floorToCode(_selectedFloor),
+            _selectedRoom
+          ].join('/');
+          // console.log(_childRef);
+          _removeRef.child(_childRef).once('value').then(function(_snapshot) {
+            _removeRef.child(_childRef + '/time').transaction(function(_data) {
+              var _dd = _data === null ? '0' : _data;
+              // console.log(_dd, _removalConfirm, _removalTime);
+              return _updateData(_removalConfirm, _dd, _removalTime);
+            }).then(function(_snapshot) {
+              console.log('Single data committed: ' + _snapshot.committed);
+              console.log(_snapshot.snapshot.val());
+              // Close scrim dialog when update is done.
+              _closeScrimDialog();
+            }).catch(function(error) {
+              console.error(error);
+            });
+          });
+        }
+
+        // Remove all data on [date] at all [time].
+        function _removeSingleDay(_removalConfirm, _removalDate, _selectedSite, _selectedFloor, _selectedRoom, _ww) {
+          var _childRef = [
+            'week' + _.padStart(_ww, 2, '0'),
+            _removalDate.slice(-2),
+            'site',
+            _siteToCode(_selectedSite),
+            _floorToCode(_selectedFloor),
+            _selectedRoom
+          ].join('/');
+          // console.log(_childRef);
+          _removeRef.child(_childRef).once('value').then(function(_snapshot) {
+            _removeRef.child(_childRef + '/time').transaction(function(_data) {
+              // var _dd = _data === null ? '0' : _data;
+              // console.log(_dd, _removalConfirm, _removalTime);
+              return _removalConfirm === 'remove' ? '0' : _.repeat('f', 8);
+            }).then(function(_snapshot) {
+              console.log(_snapshot.committed);
+              console.log(_snapshot.snapshot.val());
+              // Close scrim dialog when update is done.
+              _closeScrimDialog();
+            }).catch(function(error) {
+              console.error(error);
+            });
+          });
+        }
+
+        // Remove all data on all [date] at [time].
+        function _removeSingleHour(_removalConfirm, _removalTime, _selectedSite, _selectedFloor, _selectedRoom, _activeFullYear, _activeMonth, _computeTotalDaysCb, _computeWeekCb, _toRemoveAll) {
+          var _siteCode = _siteToCode(_selectedSite);
+          var _floorCode = _floorToCode(_selectedFloor);
+          var _datesArray = _computeAllDatesInMonth(_activeFullYear, _activeMonth, _computeTotalDaysCb, _computeWeekCb);
+
+          // Map all dates into Firebase Promises.
+          var _allDatesWithRef = _datesArray.map(function(_date) {
+            var _eachChildRef = [
+              _date.week,
+              _date.date,
+              'site',
+              _siteCode,
+              _floorCode,
+              _selectedRoom
+            ].join('/');
+            return _eachChildRef;
+          });
+
+          // Map all refs into Firebase Promises.
+          var _allDatesWithPromises = _allDatesWithRef.map(function(_ref) {
+            return _removeRef.child(_ref).once('value').then(function() {
+              return _removeRef.child(_ref + '/time').transaction(function(_data) {
+                var _dd = _data === null ? '0' : _data;
+                // To remove all data or all hours.
+                if (_toRemoveAll) {
+                  return _removalConfirm === 'remove' ? '0' : _.repeat('f', 8);
+                }else {
+                  return _updateData(_removalConfirm, _dd, _removalTime);
+                }
+              });
+            });
+          });
+          // Firebase Promises all.
+          Promise.all(_allDatesWithPromises).then(function(_snapshot) {
+            var _allCommitted = _snapshot.every(function(_n) {
+              return _n.committed === true;
+            });
+            console.log('Promise.all committed to Firebase: ' + _allCommitted);
+            console.log(_snapshot);
+            // Close scrim dialog when update is done.
+            _closeScrimDialog();
+          }).catch(function(error) {
+            console.error(error);
+          });
+
+          // Compute dates array of a month.
+          function _computeAllDatesInMonth(_activeFullYear, _activeMonth, _computeTotalDaysCb, _computeWeekCb) {
+            var _td = _computeTotalDaysCb(_activeFullYear, _activeMonth);
+            var _datesArray = [];
+            for (var i = 0; i < _td; i ++) {
+              var _dd = new Date(_activeFullYear, _activeMonth, i + 1);
+              var _day = _dd.getDay();
+              if (_day > 0 && _day < 6) {
+                var _ww = 'week' + _.padStart(_computeWeekCb(_dd), 2, '0');
+                _datesArray.push({
+                  week: _ww,
+                  date: _.padStart(i + 1, 2, '0')
+                });
+              }
+            }
+            return _datesArray;
+          }
+        }
+
+        // Compute AND-ed or OR-ed timeHex and return the result.
+        function _updateData(_removalConfirm, _timeHex, _removalTime) {
+          var _timeDec = parseInt(_timeHex, 16).toString(10);
+          var _removalTimeIdx = _timeToIdx(_removalTime);
+          if (_removalConfirm === 'remove') {
+            // AND with 0 to remove.
+            var _mask = _.fill(_.fill(Array(32), 1), 0, _removalTimeIdx, _removalTimeIdx + 1).join('');
+            var _maskDec = parseInt(_mask, 2).toString(10);
+            var _result =  parseInt((_timeDec & _maskDec) >>> 0, 10).toString(16);
+            return _result;
+          }else {
+            // OR with 1 to add.
+            var _mask = _.fill(_.fill(Array(32), 0), 1, _removalTimeIdx, _removalTimeIdx + 1).join('');
+            var _maskDec = parseInt(_mask, 2).toString(10);
+            var _result = parseInt((_timeDec | _maskDec) >>> 0, 10).toString(16);
+            return _result;
+          }
+        }
+
+        // Get codename from sitename.
+        function _siteToCode(_siteName) {
+          var _siteNames = ['KLB - Tower 5', 'KLB - Tower 2A', 'SUITE'];
+          var _siteCodes = ['alpha', 'beta', 'gamma'];
+          var _idx = _siteNames.indexOf(_siteName);
+          return _idx < 0 ? 'alpha' : _siteCodes[_idx];
+        }
+        // Get codename from floorname.
+        function _floorToCode(_floorName) {
+          var _codeNames = ['01level', '02level', '03level', '04level', '05level', '06level',
+            '07level', '08level', '09level', '10level', '11level', '12level'];
+          var _floorNames = ['level 1', 'level 2', 'level 3', 'level 3A', 'level 5', 'level 6',
+            'level 7', 'level 8', 'level 9', 'level 10', 'level 11', 'level 12'];
+          var _idx = _floorNames.indexOf(_floorName);
+          return _idx < 0 ? '12level' : _codeNames[_idx];
+        }
+        // Get timeindex from timestring.
+        function _timeToIdx(_removalTime) {
+          var _hh = parseInt(_removalTime.slice(0, 2));
+          var _mm = parseInt(_removalTime.slice(-2));
+          var _tt = _hh * 60 + _mm;
+          var _ii = (_tt - 480) / 30;
+          return _ii;
+        }
+
+        // Strictly no reset view when removing data.
+        this.set('_resetViewAfterAllDataInMonth', false);
+        this.debounce('removeData', function() {
+          // console.log(this._removalMsg, this._removalDate, this._removalTime, this._activeFullYear, this._activeMonth, this._selectedSite, this._selectedFloor, this._selectedRoom, this._controlURL);
+          // console.log(this._singleData, this._singleDay, this._singleHour, this._removalOption, this._removalConfirm);
+
+          // Filter removal type and update Firebase.
+          _filterRemovalType(_singleData, _singleDay, _singleHour, _removalConfirm, _removalOption, _removalDate, _removalTime, _selectedSite, _selectedFloor, _selectedRoom, _ww);
+        }, 1);
+      },
+
+
+      // TODO: X - Click OK to confirm changing room, NOT confirmed by radio button.
+      // TODO: X - Add spinner when in new month/ room.
+      // TODO: X - Resort array if week52 or week53 appears in 00january.
+      // TODO: F - Dynamically add ripple effect on tapped item, by creating another element.
+      // TODO: X - Replaced ripple effect by self-crafted [pressed] effect.
+      // TODO: X - Animation for all dialogs.
+      // TODO: X - Detect touchmove when scrolling to cancel opening dialog.
+      // TODO: X - Debounce 10ms of down and up mouse/ touch events and 1ms of touchmove.
+      // TODO: X - Combined removal and insertion into one dialog and manipulate the content.
+      // TODO: X - Cancel exit animation that's still running for next dialog opens.
+      // TODO: X - Add/ Remove data and update Firebase.
+
+    });
+  </script>
+</dom-module>
