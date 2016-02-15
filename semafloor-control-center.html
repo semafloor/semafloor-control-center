@@ -859,6 +859,16 @@ Example:
         console.log(ev.detail.val());
         var _monthSnapshot = ev.detail.val();
 
+        // Remove any history inside the value.
+        var _temp = {};
+        _.forIn(_monthSnapshot, (_week, _weekKey) => {
+          if (_weekKey.includes('week')) {
+            _temp[_weekKey] = _week;
+          }
+        });
+        // Reassign filtered result into _monthSnapshot.
+        _monthSnapshot = _temp;
+
         this.set('_monthSnapshot', _monthSnapshot);
         // Run _filterRoomData once new _monthSnapshot is set.
         if (this._resetViewAfterAllDataInMonth) {
