@@ -11,11 +11,17 @@
   </head>
   <body>
     <style is="custom-style">
-      body {
+      html, body {
         margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+      }
+
+      body {
         font-family: 'Roboto', 'Noto', 'Helvetica', sans-serif;
         -webkit-font-smoothing: antialiased;
       }
+
     </style>
 
     <semafloor-control-center></semafloor-control-center>
@@ -23,6 +29,11 @@
     <script>
       var demo = document.querySelector('template[is=dom-bind]');
 
+      window.addEventListener('when-cc-attached', function(ev) {
+        var _app = ev.target;
+        var _tel = _app.getElementsByTagName('*').length;
+        console.log('Total element nodes w/ Lazy-Loading: ', _tel);
+      });
     </script>
 
   </body>

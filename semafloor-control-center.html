@@ -5,9 +5,11 @@
 <link rel="import" href="../jv-datepicker/datepicker-slide-from-top-animation.html">
 
 <link rel="import" href="../app-layout/app-layout.html">
+<link rel="import" href="../app-layout/app-scroll-effects/app-scroll-effects.html">
 
+<link rel="import" href="../iron-ajax/iron-ajax.html">
 <link rel="import" href="../iron-pages/iron-pages.html">
-<link rel="import" href="../iron-list/iron-list.html">
+<!-- <link rel="import" href="../iron-list/iron-list.html"> -->
 <!-- <link rel="import" href="../iron-scroll-threshold/iron-scroll-threshold.html"> -->
 
 <link rel="import" href="../paper-button/paper-button.html">
@@ -58,14 +60,26 @@ Example:
 
       /* app shell related */
       app-header {
-        background-color: #009688;
+        color: #009688;
+        --app-header-background-front-layer: {
+          background-color: #fff;
+        };
+        --app-header-background-rear-layer: {
+          background-color: #009688;
+        };
+      }
+      app-header.condensed [bottom-item] {
         color: #fff;
       }
+      app-header.condensed [bottom-item] paper-button {
+        color: #FFFF00;
+      }
+
       app-toolbar > paper-icon-button[drawer-toggle] {
         margin-right: 16px;
       }
       app-toolbar[bottom-item] paper-button {
-        color: #FFFF00;
+        color: #ffab40;
       }
       app-toolbar[bottom-item] > div.selected-info {
         font-size: 14px;
@@ -167,6 +181,10 @@ Example:
       div.each-data-in-hour {
         cursor: pointer;
       }
+      div.each-date-in-month.is-today {
+        background-color: #2196F3;
+        color: #fff;
+      }
       div.each-date-in-month.no-pointer {
         pointer-events: none;
       }
@@ -197,18 +215,20 @@ Example:
       }
     </style>
 
+    <iron-ajax
+      auto
+      url="all-sites-data.json"
+      handle-as="json"
+      last-response="{{_allSitesData}}"
+      on-response="_onResponse"></iron-ajax>
+
     <firebase-collection id="controlBase" location="[[_controlURL]]" on-firebase-value="_onFirebaseValue"></firebase-collection>
 
     <app-drawer-layout narrow="{{_isNarrow}}" force-narrow>
-      <app-drawer swipe-open>
-        <app-header-layout>
-          <app-header>
-          </app-header>
-        </app-header-layout>
-      </app-drawer>
+      <app-drawer swipe-open></app-drawer>
 
       <app-header-layout>
-        <app-header shadow fixed>
+        <app-header fixed condenses effects="material fade-background" on-app-header-transform="_onDocumentScrolling">
           <app-toolbar>
             <paper-icon-button icon="icons:menu" drawer-toggle></paper-icon-button>
             Control Center
@@ -221,6 +241,9 @@ Example:
             </div>
             <paper-icon-button icon="icons:chevron-right" month="next" on-tap="_selectMonth"></paper-icon-button>
           </app-toolbar>
+
+          <span condensed-title hidden></span>
+          <span title hidden></span>
         </app-header>
 
         <!-- <iron-scroll-threshold on-lower-threshold="_threshold" on-upper-threshold="_threshold" id="firstThreshold" horizontal> -->
@@ -239,7 +262,7 @@ Example:
               <div class="all-data-container">
                 <div class="all-dates-in-month" on-down="_onDownData" on-up="_onUpData">
                   <template is="dom-repeat" items="[[_allDatesInMonth]]" index-as="index" strip-whitespace restamp="true">
-                    <div class$="each-date-in-month[[_isDateWeekend(index, _noPointerDates.*)]]" cdata="date" date-idx="[[index]]">
+                    <div class$="each-date-in-month[[_isDateWeekend(index, _noPointerDates.*)]] [[_isToday(index)]]" cdata="date" date-idx="[[index]]">
                       [[item]]
                     </div>
                   </template>
@@ -496,25 +519,10 @@ Example:
           value: 'taipei 101'
         },
 
-        _allsites: {
-          type: Array,
-          value: function() {
-            return ['KLB - Tower 5', 'KLB - Tower 2A', 'SUITE'];
-          }
-        },
-        _allfloors: {
-          type: Array,
-          value: function() {
-            return ['level 1', 'level 2', 'level 3', 'level 3A', 'level 5', 'level 6', 'level 7',
-              'level 8', 'level 9', 'level 10', 'level 11', 'level 12'];
-          }
-        },
-        _allrooms: {
-          type: Array,
-          value: function() {
-            return ['freedom tower', 'willis tower', 'taipei 101', 'the shard', 'twin towers'];
-          }
-        },
+        _allsites: Array,
+        _allfloors: Array,
+        _allrooms: Array,
+
         _dataDialog: {
           type: Array,
           value: function() {
@@ -630,7 +638,7 @@ Example:
         'removalDialog.iron-overlay-canceled': '_restoreDocumentScrolling',
         'removalDialog.iron-overlay-closed': '_restoreDocumentScrolling',
 
-        'touchmove': '_onTouchMove',
+        'touchmove': '_onTouchMove'
       },
 
       observers: [
@@ -641,7 +649,10 @@ Example:
         // '_computeAllDates(_activeFullYear, _activeMonth, _selectedSite, _selectedFloor, _selectedRoom)',
         '_updateFirebaseURL(_activeMonth)',
         '_filterRoomData(_selectedRoom, _monthSnapshot)',
-        '_computeDatesInMonth(_activeMonth)'
+        '_computeDatesInMonth(_activeMonth)',
+
+        '_computeFloorsOnSite(_activeSite, _allSitesData)',
+        '_computeRoomsOnFloor(_activeFloor, _allSitesData)'
       ],
 
       _onAppDrawerResetLayout: function() {
@@ -674,6 +685,8 @@ Example:
         // Always scroll to top on attached.
         window.scrollTo(0, 0);
         this.$.allDataScrollableWrapper.scrollLeft = 0;
+
+        this.fire('when-cc-attached');
       },
 
       detached: function() {
@@ -798,6 +811,7 @@ Example:
         return Math.ceil(((_now - _onejan) / 86400000 + 1) / 7);
       },
 
+      // Compute classes...
       _isReserved: function(_item) {
         if (_.isEmpty(_item)) {
           return ' is-weekend';
@@ -822,6 +836,17 @@ Example:
           return n === _index;
         });
         return _weekendDetected ? ' no-pointer' : '';
+      },
+      _isToday: function(_index) {
+        var _fullyear = this._activeFullYear;
+        var _month = this._activeMonth;
+        var _today = new Date();
+        var _yy = _today.getFullYear();
+        var _mm = _today.getMonth();
+        var _dd = _today.getDate();
+        var _isToday = _fullyear == _yy && _month == _mm && _dd == _index + 1;
+
+        return _isToday ? 'is-today' : '';
       },
 
       _updateFirebaseURL: function(_activeMonth) {
@@ -908,7 +933,7 @@ Example:
         var _nullFilled = _.fill(Array(32), '');
         var _site = _siteToCode(this._selectedSite);
         var _floor = _floorToCode(this._selectedFloor);
-        var _room = this._selectedRoom;
+        var _room = _selectedRoom;
         var _sortedSnapshot = _.sortBy(_monthSnapshot);
         var _wwLen = _sortedSnapshot.length;
 
@@ -947,6 +972,7 @@ Example:
         this.set('_noPointerDates', []);
         // Update _allDataInMonth with new data.
         this.set('_allDataInMonth', _tempArray);
+
         if (this._resetViewAfterAllDataInMonth) {
           this.debounce('', function() {
             window.scrollTo(0, 0);
@@ -1478,6 +1504,30 @@ Example:
         }, 1);
       },
 
+      _onResponse: function(ev) {
+        // _allSites, _allFloors, _allRooms
+        var _allSitesData = this._allSitesData;
+        var _ss = Object.keys(_allSitesData);
+        this.set('_allsites', _ss);
+      },
+
+      _computeFloorsOnSite: function(_activeSite, _allSitesData) {
+        if (!!_allSitesData) {
+          var _ff = Object.keys(_allSitesData[_activeSite]);
+          this.set('_allfloors', _ff);
+        }
+      },
+      _computeRoomsOnFloor: function(_activeFloor, _allSitesData) {
+        if (!!_allSitesData) {
+          var _activeSite = this._activeSite;
+          var _rr = Object.keys(_allSitesData[_activeSite][_activeFloor]);
+          this.set('_allrooms', _rr);
+        }
+      },
+
+      _onDocumentScrolling: function(ev) {
+        this.toggleClass('condensed', ev.detail.progress > 0.5, ev.target);
+      },
 
       // TODO: X - Click OK to confirm changing room, NOT confirmed by radio button.
       // TODO: X - Add spinner when in new month/ room.
@@ -1490,8 +1540,9 @@ Example:
       // TODO: X - Combined removal and insertion into one dialog and manipulate the content.
       // TODO: X - Cancel exit animation that's still running for next dialog opens.
       // TODO: X - Add/ Remove data and update Firebase.
-      // TODO: Ocd - Desktop layout.
 
+      // TODO: Ocd - Desktop layout.
+      // TODO: Forced reflow is critical. Need to get fixed ASAP (...when I've got the time =) );
     });
   </script>
 </dom-module>
